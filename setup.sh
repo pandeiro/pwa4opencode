@@ -188,6 +188,22 @@ if [ "$READY" -eq 1 ]; then
         echo "             Home-screen install may not work with this opencode version." >&2
         echo "             See docs/ADR.md for background." >&2
     fi
+
+    ASSERTION=0
+    for _ in $(seq 1 10); do
+        # grep -q would SIGPIPE pmset under pipefail; count matches instead.
+        ASSERTIONS="$(pmset -g assertions 2>/dev/null || true)"
+        if [ "$(printf '%s\n' "$ASSERTIONS" | grep -c caffeinate)" -gt 0 ]; then
+            ASSERTION=1
+            break
+        fi
+        sleep 1
+    done
+    if [ "$ASSERTION" -eq 1 ]; then
+        echo "    stay-awake assertion active: awake on AC power, normal sleep on battery."
+    else
+        echo "    warning: no caffeinate assertion detected; the Mac may sleep on AC power." >&2
+    fi
 else
     echo "    warning: opencode did not respond within 15s." >&2
     if launchctl print "gui/$(id -u)/$PLIST_NAME" 2>/dev/null | grep -q "state = not running"; then

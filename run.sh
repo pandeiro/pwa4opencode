@@ -31,10 +31,18 @@ if lsof -nP -iTCP:"$OPENCODE_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
     exit 1
 fi
 
+CAFFEINATE_PID=""
+if [ "${AWAKE:-1}" = "1" ]; then
+    # AC-only no-sleep assertion; released automatically when run.sh exits.
+    caffeinate -s -w $$ &
+    CAFFEINATE_PID=$!
+fi
+
 OPENCODE_PID=""
 
 shutdown() {
     [ -n "$OPENCODE_PID" ] && kill "$OPENCODE_PID" 2>/dev/null
+    [ -n "$CAFFEINATE_PID" ] && kill "$CAFFEINATE_PID" 2>/dev/null
     exit 0
 }
 trap shutdown INT TERM

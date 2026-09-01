@@ -126,6 +126,25 @@ therefore treated as best-effort only:
   already bound and fails loudly instead of crash-looping against an
   occupied socket.
 
+### 8. Stay-awake policy: daemon-scoped caffeinate assertion
+
+The service is only reachable while the Mac is awake, and aggressive
+idle-sleep settings make a laptop unreliable as a server on AC power. `run.sh`
+holds a single `caffeinate -s` `PreventSystemSleep` assertion for the daemon's
+lifetime (`-w $$`), which macOS honors only on AC power: plugged in, the Mac
+stays awake (display sleep unaffected); on battery, normal sleep settings
+apply and the service is unreachable while asleep — the intended policy.
+
+The assertion is scoped to the daemon rather than to system configuration
+(`sudo pmset -c sleep 0`): no privilege escalation during setup, no global
+side effects that survive uninstall, and no risk of System Settings
+overwriting the policy later. Wake-on-demand alternatives (Wake-on-LAN,
+Bonjour Sleep Proxy) cannot serve this access pattern across a tailnet. The
+assertion does not cover lid-close sleep: clamshell mode with an external
+display stays awake, and a closed lid without a display sleeps regardless of
+power source — documented, not worked around. Opt-out via `AWAKE=0` in the
+generated env file.
+
 ## Constraints and non-goals
 
 - macOS only. Linux equivalents (systemd user units) are welcome but unimplemented.

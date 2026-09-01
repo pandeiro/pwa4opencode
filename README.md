@@ -52,12 +52,26 @@ OPENCODE_SERVER_PASSWORD=secret ./setup.sh
 ./uninstall.sh  # remove agent + generated files, optionally reset Tailscale Serve
 ```
 
+## Power behavior
+
+While the agent runs, the Mac holds an AC-only no-sleep assertion
+(`caffeinate -s`): it stays awake whenever it is plugged in — including when
+the display blanks — and follows your normal sleep settings on battery.
+Stopping or uninstalling the daemon releases the assertion automatically.
+
+- On battery, the Mac sleeps normally and the PWA is unreachable until it
+  wakes (plug in or open the lid).
+- Closing the lid still sleeps the Mac, unless it is in clamshell mode with
+  an external display.
+- Opt out by setting `AWAKE=0` in `pwa4opencode.env`, then `./stop.sh && ./setup.sh`.
+
 ## Troubleshooting
 
 - **opencode not found** — pass its location: `./setup.sh --opencode ~/.opencode/bin/opencode`
 - **Port already in use** — another opencode is running; stop it or use `--port`
 - **Your URL** — `tailscale serve status`
 - **Logs** — `opencode.log` / `opencode.err.log` in this directory
+- **PWA unreachable** — Mac is likely asleep (battery or lid closed); wake it
 
 ## Design notes
 
