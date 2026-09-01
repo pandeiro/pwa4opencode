@@ -1,6 +1,7 @@
 #!/bin/bash
-# run.sh — start opencode's headless web server.
-# Invoked by launchd (installed via setup.sh); can also be run in a terminal.
+# run.sh — supervise opencode's headless web server.
+# launchd spawns this once (KeepAlive respawns are unreliable on current macOS);
+# this loop restarts opencode if it crashes.
 
 set -u
 
@@ -30,13 +31,28 @@ if lsof -nP -iTCP:"$OPENCODE_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
     exit 1
 fi
 
-"$OPENCODE_BIN" serve --port "$OPENCODE_PORT" --hostname 127.0.0.1 &
-OPENCODE_PID=$!
+OPENCODE_PID=""
 
-trap 'kill "$OPENCODE_PID" 2>/dev/null; exit 0' INT TERM
+shutdown() {
+    [ -n "$OPENCODE_PID" ] && kill "$OPENCODE_PID" 2>/dev/null
+    exit 0
+}
+trap shutdown INT TERM
 
-wait "$OPENCODE_PID"
-STATUS=$?
+FIRST=1
+while :; do
+    if [ "$FIRST" -eq 1 ]; then
+        FIRST=0
+    else
+        # Back off before restarting; 1s chunks keep TERM latency low.
+        for _ in $(seq 1 10); do
+            sleep 1
+        done
+    fi
 
-echo "error: opencode exited unexpectedly (status $STATUS); supervisor will restart." >&2
-exit 1
+    "$OPENCODE_BIN" serve --port "$OPENCODE_PORT" --hostname 127.0.0.1 &
+    OPENCODE_PID=$!
+    wait "$OPENCODE_PID"
+    STATUS=$?
+    echo "warning: opencode exited (status $STATUS); restarting in 10s." >&2
+done

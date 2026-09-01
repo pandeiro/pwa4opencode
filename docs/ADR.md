@@ -62,8 +62,9 @@ visible at runtime. Resolving binaries by absolute path is therefore mandatory.
   to `pwa4opencode.env` (mode 600, gitignored).
 - `run.sh` sources that file and contains no discovery logic of its own; if the
   file is missing it fails with a pointer to `setup.sh`.
-- The agent uses `KeepAlive` (restart on exit) with `ThrottleInterval` 10 to
-  bound restart frequency, and logs to files in the project directory.
+- The agent uses `KeepAlive` with `ThrottleInterval` 10; effective crash
+  supervision is internal to `run.sh` (see Process supervision semantics).
+  The agent logs to files in the project directory.
 
 ### 4. Dependency resolution: explicit flag → PATH → common locations
 
@@ -108,12 +109,22 @@ is gated behind an interactive confirmation.
 
 ## Process supervision semantics
 
-`run.sh` starts a single child (`opencode serve`), traps `INT`/`TERM` to
-forward termination, and blocks in `wait`. If the child exits for any reason,
-`run.sh` exits non-zero and launchd restarts it after the throttle interval.
-Before starting, `run.sh` refuses to run if the configured port is already
-bound (a stale manual instance is the common case) and fails loudly instead of
-crash-looping against an occupied socket.
+Empirically on current macOS, `launchctl bootstrap` can register an agent but
+pend its initial `RunAtLoad` spawn indefinitely (`pended nondemand spawn`),
+and the same applies to `KeepAlive` respawns. launchd-side spawning is
+therefore treated as best-effort only:
+
+- `setup.sh` demands the first spawn explicitly with `launchctl kickstart`
+  after bootstrapping, then verifies over HTTP that the server is answering
+  before reporting success.
+- `run.sh` owns crash supervision: it restarts `opencode serve` with a 10s
+  backoff and exits only on `INT`/`TERM`, so a single launchd spawn per login
+  session is sufficient. The backoff sleeps in 1-second chunks to keep signal
+  handling inside launchd's 5-second exit timeout, so termination never
+  orphans the child.
+- Before the first start, `run.sh` refuses to run if the configured port is
+  already bound and fails loudly instead of crash-looping against an
+  occupied socket.
 
 ## Constraints and non-goals
 

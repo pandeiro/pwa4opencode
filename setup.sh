@@ -154,6 +154,9 @@ launchctl bootout "gui/$(id -u)" "$PLIST_PATH" >/dev/null 2>&1 \
     || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" >/dev/null 2>&1 \
     || launchctl load "$PLIST_PATH"
+# On current macOS, bootstrap alone can pend the initial RunAtLoad spawn
+# indefinitely ("pended nondemand spawn = speculative"). Demand the first run.
+launchctl kickstart "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1 || true
 
 echo "==> Waiting for opencode to come up on 127.0.0.1:$OPENCODE_PORT"
 READY=0
@@ -186,7 +189,12 @@ if [ "$READY" -eq 1 ]; then
         echo "             See docs/ADR.md for background." >&2
     fi
 else
-    echo "    warning: opencode did not respond within 15s. Check $PROJECT_DIR/opencode.err.log" >&2
+    echo "    warning: opencode did not respond within 15s." >&2
+    if launchctl print "gui/$(id -u)/$PLIST_NAME" 2>/dev/null | grep -q "state = not running"; then
+        echo "    hint: the agent is registered but not running. Try:" >&2
+        echo "          launchctl kickstart gui/$(id -u)/$PLIST_NAME" >&2
+    fi
+    echo "    Check $PROJECT_DIR/opencode.err.log" >&2
 fi
 
 if [ -n "$TAILSCALE_BIN" ]; then
